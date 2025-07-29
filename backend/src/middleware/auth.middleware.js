@@ -5,16 +5,12 @@ export const protectRoute = async (req, res, next) => {
   try {
     let token;
 
-    // ✅ First try Authorization header
     if (
       req.headers.authorization &&
       req.headers.authorization.startsWith("Bearer ")
     ) {
       token = req.headers.authorization.split(" ")[1];
-    }
-
-    // ✅ If not found in headers, try cookie
-    if (!token && req.cookies.jwt) {
+    } else if (req.cookies?.jwt) {
       token = req.cookies.jwt;
     }
 
@@ -24,14 +20,16 @@ export const protectRoute = async (req, res, next) => {
       });
     }
 
-    const decode = jwt.verify(token, process.env.JWT_SEC_KEY);
-    if (!decode) {
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SEC_KEY);
+    } catch (err) {
       return res.status(401).json({
-        message: "Unauthorized - Invalid token",
+        message: "Unauthorized - Invalid or expired token",
       });
     }
 
-    const user = await User.findById(decode.userId).select("-password");
+    const user = await User.findById(decoded.userId).select("-password");
     if (!user) {
       return res.status(401).json({
         message: "Unauthorized - User not found",
@@ -41,7 +39,7 @@ export const protectRoute = async (req, res, next) => {
     req.user = user;
     next();
   } catch (error) {
-    console.log("Error in protected middleware", error);
+    console.error("ProtectRoute Error:", error.message);
     res.status(500).json({
       message: "Internal Server Error",
     });
